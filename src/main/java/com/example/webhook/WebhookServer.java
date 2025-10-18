@@ -36,20 +36,29 @@ static class PingHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange ex) throws IOException {
         String method = ex.getRequestMethod();
-        if (!"GET".equalsIgnoreCase(method) && !"HEAD".equalsIgnoreCase(method)) {
-            ex.sendResponseHeaders(405, -1);
+        byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
+
+        if ("HEAD".equalsIgnoreCase(method)) {
+            // ✅ Correct: no body for HEAD
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
             return;
         }
-        byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
+
+        if (!"GET".equalsIgnoreCase(method)) {
+            ex.sendResponseHeaders(405, -1);
+            ex.close();
+            return;
+        }
+
+        // Normal GET response
         ex.sendResponseHeaders(200, ok.length);
-        // For HEAD requests, no body should be sent
-        if (!"HEAD".equalsIgnoreCase(method)) {
-            try (OutputStream os = ex.getResponseBody()) {
-                os.write(ok);
-            }
+        try (OutputStream os = ex.getResponseBody()) {
+            os.write(ok);
         }
     }
 }
+
 
 static class WebhookHandler implements HttpHandler {
     @Override
