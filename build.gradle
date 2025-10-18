@@ -1,0 +1,26 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'com.example.webhook.WebhookServer'
+}
+
+tasks.jar {
+    archiveBaseName.set('webhook-server')
+    archiveVersion.set('')
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
+
+// No external deps needed for now (we’re using JDK’s HttpServer)
+// If you later want JSON parsing, add Gson:
+// dependencies { implementation 'com.google.code.gson:gson:2.10.1' }
