@@ -1,0 +1,17 @@
+{
+  "object_kind": "pipeline",
+  "project": {
+    "name": "DevSecOps Pipeline"
+  },
+  "object_attributes": {
+    "id": 2312,
+    "ref": "main",
+    "status": "success"
+  },
+  "user": {
+    "username": "nitinsobti58"
+  },
+  "commit": {
+    "title": "Initial pipeline run"
+  }
+}

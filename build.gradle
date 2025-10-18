@@ -12,6 +12,9 @@ java {
 application {
     mainClass = 'com.example.webhook.WebhookServer'
 }
+repositories {
+    mavenCentral()
+}
 
 tasks.jar {
     archiveBaseName.set('webhook-server')
@@ -24,3 +27,9 @@ tasks.jar {
 // No external deps needed for now (we’re using JDK’s HttpServer)
 // If you later want JSON parsing, add Gson:
 // dependencies { implementation 'com.google.code.gson:gson:2.10.1' }
+
+dependencies {
+    implementation 'org.java-websocket:Java-WebSocket:1.5.6'
+    implementation 'com.google.code.gson:gson:2.10.1' // you already might have this
+}
+
