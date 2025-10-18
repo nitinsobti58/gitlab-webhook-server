@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 java {
@@ -12,8 +13,14 @@ java {
 application {
     mainClass = 'com.example.webhook.WebhookServer'
 }
+
 repositories {
     mavenCentral()
+}
+
+dependencies {
+    implementation 'org.java-websocket:Java-WebSocket:1.5.6'
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.jar {
@@ -24,12 +31,11 @@ tasks.jar {
     }
 }
 
-// No external deps needed for now (we’re using JDK’s HttpServer)
-// If you later want JSON parsing, add Gson:
-// dependencies { implementation 'com.google.code.gson:gson:2.10.1' }
-
-dependencies {
-    implementation 'org.java-websocket:Java-WebSocket:1.5.6'
-    implementation 'com.google.code.gson:gson:2.10.1' // you already might have this
+tasks.named('build') {
+    dependsOn 'shadowJar'
 }
 
+tasks.named('shadowJar') {
+    archiveBaseName.set('webhook-server')
+    archiveVersion.set('')
+}

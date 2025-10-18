@@ -18,7 +18,7 @@ public class WebhookServer {
     public static void main(String[] args) throws IOException {
         // Render sets PORT env var for you
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
-        int wsPort = 8081;
+        int wsPort = port;
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/webhook", new WebhookHandler());

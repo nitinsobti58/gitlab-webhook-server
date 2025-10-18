@@ -1,20 +1,30 @@
-# Use OpenJDK 21 as the base image
+# 🧰 Use OpenJDK 21 slim as base
 FROM openjdk:21-jdk-slim
 
 # Set the working directory
 WORKDIR /app
 
-# Copy everything from the repo to the container
-COPY . .
+# Copy Gradle wrapper and build files first (better caching)
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle .
+COPY settings.gradle .
 
-# Make gradlew executable (important!)
+# Make gradlew executable
 RUN chmod +x ./gradlew
 
-# Build the project
-RUN ./gradlew build
+# Pre-fetch dependencies (so Docker doesn't rebuild this layer every time)
+RUN ./gradlew dependencies --no-daemon
 
-# Expose the port Render will assign
+# Now copy the rest of the source code
+COPY src src
+
+# 🏗️ Build the fat JAR using Shadow plugin
+RUN ./gradlew shadowJar --no-daemon
+
+# Expose the port Render provides (default $PORT)
 EXPOSE 8080
 
-# Start the server
-CMD ["java", "-jar", "build/libs/webhook-server.jar"]
+# Start the fat JAR
+CMD ["java", "-jar", "build/libs/webhook-server-all.jar"]
+
