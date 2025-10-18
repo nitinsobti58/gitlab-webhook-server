@@ -22,17 +22,25 @@ public class WebhookServer {
     }
 
     // Lightweight liveness endpoint
-    static class PingHandler implements HttpHandler {
-        @Override public void handle(HttpExchange ex) throws IOException {
-            if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
-                ex.sendResponseHeaders(405, -1);
-                return;
+static class PingHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange ex) throws IOException {
+        String method = ex.getRequestMethod();
+        if (!"GET".equalsIgnoreCase(method) && !"HEAD".equalsIgnoreCase(method)) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, ok.length);
+        // For HEAD requests, no body should be sent
+        if (!"HEAD".equalsIgnoreCase(method)) {
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(ok);
             }
-            byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
-            ex.sendResponseHeaders(200, ok.length);
-            try (OutputStream os = ex.getResponseBody()) { os.write(ok); }
         }
     }
+}
+
 
     static class WebhookHandler implements HttpHandler {
         @Override
