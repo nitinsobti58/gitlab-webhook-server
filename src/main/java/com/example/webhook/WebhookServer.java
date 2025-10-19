@@ -9,7 +9,6 @@ import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.*;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
