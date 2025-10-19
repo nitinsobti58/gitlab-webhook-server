@@ -1,115 +1,96 @@
 package com.example.webhook;
 
+import io.undertow.Undertow;
+import io.undertow.Handlers;
+import io.undertow.server.HttpHandler;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.util.Headers;
+import io.undertow.websockets.WebSocketConnectionCallback;
+import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
+import io.undertow.websockets.core.*;
+import io.undertow.websockets.spi.WebSocketHttpExchange;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
 
-
-
-
-import java.io.*;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WebhookServer {
-    public static void main(String[] args) throws IOException {
-        // Render sets PORT env var for you
+
+    private static final Set<WebSocketChannel> clients = ConcurrentHashMap.newKeySet();
+    private static final Gson gson = new Gson();
+
+    public static void main(String[] args) {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
-        int wsPort = port;
 
-        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/webhook", new WebhookHandler());
-        server.createContext("/ping", new PingHandler()); // for uptime pings
-        server.setExecutor(null);
+        // 👇 Define WebSocket handler
+        WebSocketProtocolHandshakeHandler wsHandler =
+            Handlers.websocket(new WebSocketConnectionCallback() {
+                @Override
+                public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel channel) {
+                    clients.add(channel);
+                    System.out.println("🔌 WebSocket client connected: " + channel.getPeerAddress());
+
+                    channel.getReceiveSetter().set(new AbstractReceiveListener() {
+                        @Override
+                        protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
+                            String msg = message.getData();
+                            System.out.println("📩 Message from GUI: " + msg);
+                        }
+
+                        @Override
+                        protected void onClose(WebSocketChannel channel, StreamSourceFrameChannel frameChannel) {
+                            clients.remove(channel);
+                            System.out.println("❌ WebSocket client disconnected: " + channel.getPeerAddress());
+                        }
+                    });
+                    channel.resumeReceives();
+                }
+            });
+
+        // 👇 Basic /ping endpoint
+        HttpHandler pingHandler = exchange -> {
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+            exchange.getResponseSender().send("OK");
+        };
+
+        // 👇 Webhook endpoint
+        HttpHandler webhookHandler = exchange -> {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
+                exchange.setStatusCode(405);
+                exchange.endExchange();
+                return;
+            }
+
+            exchange.getRequestReceiver().receiveFullString((ex, data) -> {
+                System.out.println("📥 Received webhook payload:\n" + data);
+
+                // ✅ Broadcast payload to connected WebSocket clients
+                broadcast(data);
+
+                ex.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+                ex.getResponseSender().send("OK");
+            });
+        };
+
+        // 👇 Build server
+        Undertow server = Undertow.builder()
+                .addHttpListener(port, "0.0.0.0")
+                .setHandler(Handlers.path()
+                        .addPrefixPath("/ping", pingHandler)
+                        .addPrefixPath("/webhook", webhookHandler)
+                        .addPrefixPath("/ws", wsHandler) // 👈 WebSocket lives here
+                )
+                .build();
+
         server.start();
-        System.out.println("✅ Webhook server running on port " + port);
-
-        EventSocketServer wsServer = new EventSocketServer(wsPort);
-        wsServer.start();
+        System.out.println("✅ Undertow server running on port " + port);
     }
 
-    // Lightweight liveness endpoint
-static class PingHandler implements HttpHandler {
-    @Override
-    public void handle(HttpExchange ex) throws IOException {
-        String method = ex.getRequestMethod();
-        byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
-
-        if ("HEAD".equalsIgnoreCase(method)) {
-            // ✅ Correct: no body for HEAD
-            ex.sendResponseHeaders(200, -1);
-            ex.close();
-            return;
+    private static void broadcast(String message) {
+        for (WebSocketChannel client : clients) {
+            WebSockets.sendText(message, client, null);
         }
-
-        if (!"GET".equalsIgnoreCase(method)) {
-            ex.sendResponseHeaders(405, -1);
-            ex.close();
-            return;
-        }
-
-        // Normal GET response
-        ex.sendResponseHeaders(200, ok.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(ok);
-        }
+        System.out.println("📡 Broadcasted to " + clients.size() + " clients");
     }
-}
-
-
-static class WebhookHandler implements HttpHandler {
-    @Override
-    public void handle(HttpExchange exchange) throws IOException {
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            return;
-        }
-
-        // Token check (unchanged)
-        String provided = exchange.getRequestHeaders().getFirst("X-Gitlab-Token");
-        String expected = System.getenv("GITLAB_WEBHOOK_SECRET");
-        if (expected != null && (provided == null || !expected.equals(provided))) {
-            exchange.sendResponseHeaders(403, -1);
-            return;
-        }
-
-        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        System.out.println("📥 Raw GitLab webhook payload received");
-
-        try {
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-            JsonObject attrs = root.getAsJsonObject("object_attributes");
-
-            String projectName = root.getAsJsonObject("project").get("name").getAsString();
-            String branch = attrs.get("ref").getAsString();
-            String status = attrs.get("status").getAsString();
-            long pipelineId = attrs.get("id").getAsLong();
-            String triggeredBy = root.getAsJsonObject("user").get("username").getAsString();
-            String commitMessage = root.has("commit") 
-                    ? root.getAsJsonObject("commit").get("title").getAsString()
-                    : "";
-
-            PipelineEvent event = new PipelineEvent(projectName, branch, status, pipelineId, triggeredBy, commitMessage);
-            String json = new Gson().toJson(event);
-
-            System.out.println("📡 Broadcasting structured event: " + json);
-            EventSocketServer.broadcastMessage(json);
-
-        } catch (Exception e) {
-            System.err.println("⚠️ Failed to parse webhook: " + e.getMessage());
-            e.printStackTrace();
-            EventSocketServer.broadcastMessage(body); // fallback: send raw if parse fails
-        }
-
-        byte[] ok = "OK".getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(200, ok.length);
-        try (OutputStream os = exchange.getResponseBody()) { os.write(ok); }
-    }
-}
-
-
-
 }
