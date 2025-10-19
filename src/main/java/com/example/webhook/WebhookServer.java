@@ -22,7 +22,7 @@ public class WebhookServer {
     public static void main(String[] args) {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
 
-        // 👇 Define WebSocket handler
+        // 👇 WebSocket handler
         WebSocketProtocolHandshakeHandler wsHandler =
             Handlers.websocket(new WebSocketConnectionCallback() {
                 @Override
@@ -33,8 +33,7 @@ public class WebhookServer {
                     channel.getReceiveSetter().set(new AbstractReceiveListener() {
                         @Override
                         protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
-                            String msg = message.getData();
-                            System.out.println("📩 Message from GUI: " + msg);
+                            System.out.println("📩 Message from GUI: " + message.getData());
                         }
 
                         @Override
@@ -47,7 +46,7 @@ public class WebhookServer {
                 }
             });
 
-        // 👇 Basic /ping endpoint
+        // 👇 Ping endpoint
         HttpHandler pingHandler = exchange -> {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
             exchange.getResponseSender().send("OK");
@@ -68,48 +67,42 @@ public class WebhookServer {
                     JsonObject json = JsonParser.parseString(data).getAsJsonObject();
                     String kind = json.get("object_kind").getAsString();
 
-                    // ✅ 1. Broadcast pipeline events as-is
+                    // ✅ Handle pipeline events
                     if ("pipeline".equals(kind)) {
-                        broadcast(json.toString());
-                    }
+                        JsonObject attrs = json.getAsJsonObject("object_attributes");
 
-                    // 🧰 2. Handle job events and wrap them as pipeline events
-                    else if ("job".equals(kind)) {
-                        JsonObject build = json.getAsJsonObject("build");
-                        if (build == null) return;
-
-                        JsonObject buildPipeline = build.getAsJsonObject("pipeline");
-                        if (buildPipeline == null) return;
-
-                        // ⏳ Extract timestamps from the job object
-                        String finishedAt = build.has("finished_at") && !build.get("finished_at").isJsonNull()
-                                ? build.get("finished_at").getAsString()
-                                : null;
-                        String startedAt = build.has("started_at") && !build.get("started_at").isJsonNull()
-                                ? build.get("started_at").getAsString()
-                                : null;
-
-                        String updatedAt = finishedAt != null ? finishedAt :
-                                           startedAt != null ? startedAt :
-                                           java.time.Instant.now().toString();
-
-                        // 🧭 Ensure the timestamp ends with Z (UTC)
-                        if (updatedAt != null && !updatedAt.endsWith("Z") && !updatedAt.contains("+")) {
-                            updatedAt = updatedAt + "Z";
+                        // 🕒 Derive updated_at from finished_at or created_at
+                        String updatedAt = extractTimestamp(attrs);
+                        if (updatedAt != null) {
+                            attrs.addProperty("updated_at", updatedAt);
                         }
-
-                        // 🧱 Construct GUI-compatible object_attributes
-                        JsonObject attrs = new JsonObject();
-                        attrs.addProperty("id", buildPipeline.get("id").getAsInt());
-                        attrs.addProperty("status", buildPipeline.get("status").getAsString());
-                        attrs.addProperty("ref", buildPipeline.get("ref").getAsString());
-                        attrs.addProperty("updated_at", updatedAt);
 
                         JsonObject wrapped = new JsonObject();
                         wrapped.addProperty("object_kind", "pipeline");
                         wrapped.add("object_attributes", attrs);
 
-                        System.out.println("📡 Sending wrapped job as pipeline event:\n" + wrapped);
+                        System.out.println("🛰️ FINAL OUTGOING MESSAGE:\n" + wrapped);
+                        broadcast(wrapped.toString());
+                    }
+
+                    // 🧰 Handle job events
+                    else if ("job".equals(kind)) {
+                        JsonObject build = json.getAsJsonObject("build");
+                        if (build == null) return;
+
+                        JsonObject pipeline = build.getAsJsonObject("pipeline");
+                        if (pipeline == null) return;
+
+                        String updatedAt = extractTimestamp(build);
+                        if (updatedAt != null) {
+                            pipeline.addProperty("updated_at", updatedAt);
+                        }
+
+                        JsonObject wrapped = new JsonObject();
+                        wrapped.addProperty("object_kind", "pipeline");
+                        wrapped.add("object_attributes", pipeline);
+
+                        System.out.println("🛰️ FINAL OUTGOING MESSAGE (job wrapped):\n" + wrapped);
                         broadcast(wrapped.toString());
                     }
 
@@ -122,24 +115,41 @@ public class WebhookServer {
             });
         };
 
-        // 👇 Build server
+        // 👇 Start server
         Undertow server = Undertow.builder()
                 .addHttpListener(port, "0.0.0.0")
                 .setHandler(Handlers.path()
                         .addPrefixPath("/ping", pingHandler)
                         .addPrefixPath("/webhook", webhookHandler)
-                        .addPrefixPath("/ws", wsHandler) // 👈 WebSocket lives here
-                )
+                        .addPrefixPath("/ws", wsHandler))
                 .build();
 
         server.start();
         System.out.println("✅ Undertow server running on port " + port);
     }
 
+    /**
+     * Extracts a usable timestamp from finished_at or created_at and converts it to ISO 8601 with Z.
+     */
+    private static String extractTimestamp(JsonObject obj) {
+        String timestamp = null;
+        if (obj.has("finished_at") && !obj.get("finished_at").isJsonNull()) {
+            timestamp = obj.get("finished_at").getAsString();
+        } else if (obj.has("created_at") && !obj.get("created_at").isJsonNull()) {
+            timestamp = obj.get("created_at").getAsString();
+        }
+
+        if (timestamp != null) {
+            // Convert "2025-10-19 21:55:41 UTC" → "2025-10-19T21:55:41Z"
+            timestamp = timestamp.replace(" UTC", "Z").replace(" ", "T");
+        }
+        return timestamp;
+    }
+
     private static void broadcast(String message) {
+        System.out.println("📡 Broadcasting to " + clients.size() + " clients");
         for (WebSocketChannel client : clients) {
             WebSockets.sendText(message, client, null);
         }
-        System.out.println("📡 Broadcasted to " + clients.size() + " clients");
     }
 }
