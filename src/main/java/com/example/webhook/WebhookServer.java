@@ -72,28 +72,41 @@ public class WebhookServer {
                         // ✅ Broadcast pipeline events as-is
                         broadcast(json.toString());
                     }
+
                     else if ("job".equals(kind)) {
-                        // ✅ Extract pipeline and merge finished_at timestamp
-                        JsonObject pipeline = json.getAsJsonObject("pipeline");
-                        String finishedAt = json.has("finished_at") ? json.get("finished_at").getAsString() : null;
-                        String startedAt = json.has("started_at") ? json.get("started_at").getAsString() : null;
+                        // 🛠️ Correct handling of job events
+                        JsonObject build = json.getAsJsonObject("build");
+                        if (build == null) return;
 
-                        if (pipeline != null) {
-                            if (!pipeline.has("updated_at")) {
-                                if (finishedAt != null) {
-                                    pipeline.addProperty("updated_at", finishedAt);
-                                } else if (startedAt != null) {
-                                    pipeline.addProperty("updated_at", startedAt);
-                                }
+                        JsonObject pipeline = build.getAsJsonObject("pipeline");
+                        if (pipeline == null) return;
+
+                        String finishedAt = build.has("finished_at") && !build.get("finished_at").isJsonNull()
+                                ? build.get("finished_at").getAsString()
+                                : null;
+                        String startedAt = build.has("started_at") && !build.get("started_at").isJsonNull()
+                                ? build.get("started_at").getAsString()
+                                : null;
+
+                        if (!pipeline.has("updated_at")) {
+                            if (finishedAt != null) {
+                                pipeline.addProperty("updated_at", finishedAt);
+                            } else if (startedAt != null) {
+                                pipeline.addProperty("updated_at", startedAt);
+                            } else {
+                                // Optional fallback to now if neither is set
+                                pipeline.addProperty("updated_at", java.time.Instant.now().toString());
                             }
-
-                            JsonObject wrapped = new JsonObject();
-                            wrapped.addProperty("object_kind", "pipeline");
-                            wrapped.add("object_attributes", pipeline);
-
-                            broadcast(wrapped.toString());
                         }
+
+                        JsonObject wrapped = new JsonObject();
+                        wrapped.addProperty("object_kind", "pipeline");
+                        wrapped.add("object_attributes", pipeline);
+
+                        System.out.println("📡 Sending wrapped job as pipeline event:\n" + wrapped);
+                        broadcast(wrapped.toString());
                     }
+
                 } catch (Exception err) {
                     System.err.println("⚠️ Failed to parse or handle webhook: " + err.getMessage());
                 }
