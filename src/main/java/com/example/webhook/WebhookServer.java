@@ -68,40 +68,40 @@ public class WebhookServer {
                     JsonObject json = JsonParser.parseString(data).getAsJsonObject();
                     String kind = json.get("object_kind").getAsString();
 
+                    // ✅ 1. Broadcast pipeline events as-is
                     if ("pipeline".equals(kind)) {
-                        // ✅ Broadcast pipeline events as-is
                         broadcast(json.toString());
                     }
 
+                    // 🧰 2. Handle job events and wrap them as pipeline events
                     else if ("job".equals(kind)) {
-                        // 🛠️ Correct handling of job events
                         JsonObject build = json.getAsJsonObject("build");
                         if (build == null) return;
 
-                        JsonObject pipeline = build.getAsJsonObject("pipeline");
-                        if (pipeline == null) return;
+                        JsonObject buildPipeline = build.getAsJsonObject("pipeline");
+                        if (buildPipeline == null) return;
 
+                        // ⏳ Extract timestamps from the job object
                         String finishedAt = build.has("finished_at") && !build.get("finished_at").isJsonNull()
                                 ? build.get("finished_at").getAsString()
                                 : null;
                         String startedAt = build.has("started_at") && !build.get("started_at").isJsonNull()
                                 ? build.get("started_at").getAsString()
                                 : null;
+                        String updatedAt = finishedAt != null ? finishedAt :
+                                           startedAt != null ? startedAt :
+                                           java.time.Instant.now().toString();
 
-                        if (!pipeline.has("updated_at")) {
-                            if (finishedAt != null) {
-                                pipeline.addProperty("updated_at", finishedAt);
-                            } else if (startedAt != null) {
-                                pipeline.addProperty("updated_at", startedAt);
-                            } else {
-                                // Optional fallback to now if neither is set
-                                pipeline.addProperty("updated_at", java.time.Instant.now().toString());
-                            }
-                        }
+                        // 🧱 Construct GUI-compatible object_attributes
+                        JsonObject attrs = new JsonObject();
+                        attrs.addProperty("id", buildPipeline.get("id").getAsInt());
+                        attrs.addProperty("status", buildPipeline.get("status").getAsString());
+                        attrs.addProperty("ref", buildPipeline.get("ref").getAsString());
+                        attrs.addProperty("updated_at", updatedAt);
 
                         JsonObject wrapped = new JsonObject();
                         wrapped.addProperty("object_kind", "pipeline");
-                        wrapped.add("object_attributes", pipeline);
+                        wrapped.add("object_attributes", attrs);
 
                         System.out.println("📡 Sending wrapped job as pipeline event:\n" + wrapped);
                         broadcast(wrapped.toString());
