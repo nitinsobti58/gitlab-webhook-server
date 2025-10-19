@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebhookServer {
 
     private static final Set<WebSocketChannel> clients = ConcurrentHashMap.newKeySet();
-    private static final Gson gson = new Gson();
 
     public static void main(String[] args) {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
