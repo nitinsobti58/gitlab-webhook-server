@@ -88,9 +88,15 @@ public class WebhookServer {
                         String startedAt = build.has("started_at") && !build.get("started_at").isJsonNull()
                                 ? build.get("started_at").getAsString()
                                 : null;
+
                         String updatedAt = finishedAt != null ? finishedAt :
                                            startedAt != null ? startedAt :
                                            java.time.Instant.now().toString();
+
+                        // 🧭 Ensure the timestamp ends with Z (UTC)
+                        if (updatedAt != null && !updatedAt.endsWith("Z") && !updatedAt.contains("+")) {
+                            updatedAt = updatedAt + "Z";
+                        }
 
                         // 🧱 Construct GUI-compatible object_attributes
                         JsonObject attrs = new JsonObject();
