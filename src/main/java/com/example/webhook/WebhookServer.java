@@ -22,7 +22,7 @@ public class WebhookServer {
     public static void main(String[] args) {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
 
-        // 👇 WebSocket handler
+        // WebSocket handler
         WebSocketProtocolHandshakeHandler wsHandler =
             Handlers.websocket(new WebSocketConnectionCallback() {
                 @Override
@@ -33,13 +33,13 @@ public class WebhookServer {
                     channel.getReceiveSetter().set(new AbstractReceiveListener() {
                         @Override
                         protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
-                            System.out.println("📩 Message from GUI: " + message.getData());
+                            System.out.println(" Message from GUI: " + message.getData());
                         }
 
                         @Override
                         protected void onClose(WebSocketChannel channel, StreamSourceFrameChannel frameChannel) {
                             clients.remove(channel);
-                            System.out.println("❌ WebSocket client disconnected: " + channel.getPeerAddress());
+                            System.out.println(" WebSocket client disconnected: " + channel.getPeerAddress());
                         }
                     });
                     channel.resumeReceives();
@@ -52,7 +52,7 @@ public class WebhookServer {
             exchange.getResponseSender().send("OK");
         };
 
-        // 👇 Webhook endpoint
+        // Webhook endpoint
         HttpHandler webhookHandler = exchange -> {
             if (!"POST".equalsIgnoreCase(exchange.getRequestMethod().toString())) {
                 exchange.setStatusCode(405);
@@ -61,17 +61,17 @@ public class WebhookServer {
             }
 
             exchange.getRequestReceiver().receiveFullString((ex, data) -> {
-                System.out.println("📥 Received webhook payload:\n" + data);
+                System.out.println("Received webhook payload:\n" + data);
 
                 try {
                     JsonObject json = JsonParser.parseString(data).getAsJsonObject();
                     String kind = json.get("object_kind").getAsString();
 
-                    // ✅ Handle pipeline events
+                    // Handle pipeline events
                     if ("pipeline".equals(kind)) {
                         JsonObject attrs = json.getAsJsonObject("object_attributes");
 
-                        // 🕒 Derive updated_at from finished_at or created_at
+                        // Derive updated_at from finished_at or created_at
                         String updatedAt = extractTimestamp(attrs);
                         if (updatedAt != null) {
                             attrs.addProperty("updated_at", updatedAt);
@@ -85,7 +85,7 @@ public class WebhookServer {
                         broadcast(wrapped.toString());
                     }
 
-                    // 🧰 Handle job events
+                    // Handle job events
                     else if ("job".equals(kind)) {
                         JsonObject build = json.getAsJsonObject("build");
                         if (build == null) return;
@@ -107,7 +107,7 @@ public class WebhookServer {
                     }
 
                 } catch (Exception err) {
-                    System.err.println("⚠️ Failed to parse or handle webhook: " + err.getMessage());
+                    System.err.println(" Failed to parse or handle webhook: " + err.getMessage());
                 }
 
                 ex.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
@@ -115,7 +115,7 @@ public class WebhookServer {
             });
         };
 
-        // 👇 Start server
+        //  Start server
         Undertow server = Undertow.builder()
                 .addHttpListener(port, "0.0.0.0")
                 .setHandler(Handlers.path()
@@ -125,7 +125,7 @@ public class WebhookServer {
                 .build();
 
         server.start();
-        System.out.println("✅ Undertow server running on port " + port);
+        System.out.println("Undertow server running on port " + port);
     }
 
     /**
@@ -147,7 +147,7 @@ public class WebhookServer {
     }
 
     private static void broadcast(String message) {
-        System.out.println("📡 Broadcasting to " + clients.size() + " clients");
+        System.out.println("Broadcasting to " + clients.size() + " clients");
         for (WebSocketChannel client : clients) {
             WebSockets.sendText(message, client, null);
         }
