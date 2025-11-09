@@ -28,7 +28,7 @@ public class WebhookServer {
                 @Override
                 public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel channel) {
                     clients.add(channel);
-                    System.out.println("🔌 WebSocket client connected: " + channel.getPeerAddress());
+                    System.out.println("WebSocket client connected: " + channel.getPeerAddress());
 
                     channel.getReceiveSetter().set(new AbstractReceiveListener() {
                         @Override
@@ -46,7 +46,7 @@ public class WebhookServer {
                 }
             });
 
-        // 👇 Ping endpoint
+        // Ping endpoint
         HttpHandler pingHandler = exchange -> {
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
             exchange.getResponseSender().send("OK");
@@ -81,7 +81,7 @@ public class WebhookServer {
                         wrapped.addProperty("object_kind", "pipeline");
                         wrapped.add("object_attributes", attrs);
 
-                        System.out.println("🛰️ FINAL OUTGOING MESSAGE:\n" + wrapped);
+                        System.out.println("FINAL OUTGOING MESSAGE:\n" + wrapped);
                         broadcast(wrapped.toString());
                     }
 
@@ -102,12 +102,12 @@ public class WebhookServer {
                         wrapped.addProperty("object_kind", "pipeline");
                         wrapped.add("object_attributes", pipeline);
 
-                        System.out.println("🛰️ FINAL OUTGOING MESSAGE (job wrapped):\n" + wrapped);
+                        System.out.println("FINAL OUTGOING MESSAGE (job wrapped):\n" + wrapped);
                         broadcast(wrapped.toString());
                     }
 
                 } catch (Exception err) {
-                    System.err.println(" Failed to parse or handle webhook: " + err.getMessage());
+                    System.err.println("Failed to parse or handle webhook: " + err.getMessage());
                 }
 
                 ex.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");

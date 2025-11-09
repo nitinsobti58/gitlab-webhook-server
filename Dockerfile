@@ -1,4 +1,4 @@
-# 🧰 Use OpenJDK 21 slim as base
+# Use OpenJDK 21 slim as base
 FROM openjdk:21-jdk-slim
 
 # Set the working directory
@@ -19,7 +19,7 @@ RUN ./gradlew dependencies --no-daemon
 # Now copy the rest of the source code
 COPY src src
 
-# 🏗️ Build the fat JAR using Shadow plugin
+#  Build the fat JAR using Shadow plugin
 RUN ./gradlew shadowJar --no-daemon
 
 # Expose the port Render provides (default $PORT)
