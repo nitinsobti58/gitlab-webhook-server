@@ -8,6 +8,10 @@ import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.*;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -18,7 +22,50 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebhookServer {
 
     private static final Set<WebSocketChannel> clients = ConcurrentHashMap.newKeySet();
+    private static final String DISCORD_WEBHOOK_URL =System.getenv("DISCORD_WEBHOOK_URL");
 
+    /**
+     * Extracts a usable timestamp from finished_at or created_at and converts it to ISO 8601 with Z.
+     */
+    private static String extractTimestamp(JsonObject obj) {
+        String timestamp = null;
+        if (obj.has("finished_at") && !obj.get("finished_at").isJsonNull()) {
+            timestamp = obj.get("finished_at").getAsString();
+        } else if (obj.has("created_at") && !obj.get("created_at").isJsonNull()) {
+            timestamp = obj.get("created_at").getAsString();
+        }
+
+        if (timestamp != null) {
+            // Convert "2025-10-19 21:55:41 UTC" → "2025-10-19T21:55:41Z"
+            timestamp = timestamp.replace(" UTC", "Z").replace(" ", "T");
+        }
+        return timestamp;
+    }
+
+
+    private static void sendDiscord(String message) {
+        if (DISCORD_WEBHOOK_URL == null || DISCORD_WEBHOOK_URL.isEmpty()) return;
+
+        try {
+            String payload = "{\"content\": \"" + message.replace("\"","'") + "\"}";
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(DISCORD_WEBHOOK_URL))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build();
+
+        HttpClient.newHttpClient().sendAsync(request, HttpResponse.BodyHandlers.discarding());
+        }
+        catch (Exception ignored) {}
+}
+
+    private static void broadcast(String message) {
+        System.out.println("Broadcasting to " + clients.size() + " clients");
+        for (WebSocketChannel client : clients) {
+            WebSockets.sendText(message, client, null);
+        }
+    }
     public static void main(String[] args) {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
 
@@ -83,6 +130,13 @@ public class WebhookServer {
 
                         System.out.println("FINAL OUTGOING MESSAGE:\n" + wrapped);
                         broadcast(wrapped.toString());
+                        
+                        String status = attrs.get("status").getAsString();
+                        long id = attrs.get("id").getAsLong();
+                        String updated = attrs.has("updated_at") ? attrs.get("updated_at").getAsString() : "unknown";
+
+                        String discordMessage = "Pipeline #" + id + " " + status.toUpperCase() + " at " + updated;
+                        sendDiscord(discordMessage);
                     }
 
                     // Handle job events
@@ -104,6 +158,12 @@ public class WebhookServer {
 
                         System.out.println("FINAL OUTGOING MESSAGE (job wrapped):\n" + wrapped);
                         broadcast(wrapped.toString());
+                        String status = build.get("status").getAsString();
+                        long id = build.get("id").getAsLong();
+                        String updated = build.has("updated_at") ? build.get("updated_at").getAsString() : "unknown";
+
+                        String discordMessage = "Pipeline #" + id + " " + status.toUpperCase() + " at " + updated;
+                        sendDiscord(discordMessage);
                     }
 
                 } catch (Exception err) {
@@ -128,28 +188,5 @@ public class WebhookServer {
         System.out.println("Undertow server running on port " + port);
     }
 
-    /**
-     * Extracts a usable timestamp from finished_at or created_at and converts it to ISO 8601 with Z.
-     */
-    private static String extractTimestamp(JsonObject obj) {
-        String timestamp = null;
-        if (obj.has("finished_at") && !obj.get("finished_at").isJsonNull()) {
-            timestamp = obj.get("finished_at").getAsString();
-        } else if (obj.has("created_at") && !obj.get("created_at").isJsonNull()) {
-            timestamp = obj.get("created_at").getAsString();
-        }
 
-        if (timestamp != null) {
-            // Convert "2025-10-19 21:55:41 UTC" → "2025-10-19T21:55:41Z"
-            timestamp = timestamp.replace(" UTC", "Z").replace(" ", "T");
-        }
-        return timestamp;
-    }
-
-    private static void broadcast(String message) {
-        System.out.println("Broadcasting to " + clients.size() + " clients");
-        for (WebSocketChannel client : clients) {
-            WebSockets.sendText(message, client, null);
-        }
-    }
 }
