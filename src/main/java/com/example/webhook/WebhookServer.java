@@ -144,7 +144,7 @@ public class WebhookServer {
                         
                         String discordMessage = "Pipeline #" + attrs.get("id").getAsLong() + "/n" 
                             + attrs.get("status").getAsString() + "/n" + "Triggered at " + updatedAt+"/n"
-                            + "Triggered Source " + attrs.get("source").getAsString()+"/n"+ "Triggered by" + attrs.get("username").getAsString();
+                            + "Triggered Source " + attrs.get("source").getAsString();
                         
                         //send the discord message
                         sendDiscord(discordMessage);
