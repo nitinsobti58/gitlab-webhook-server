@@ -142,57 +142,14 @@ public class WebhookServer {
                         //send the wrapped json object to GUI
                         broadcast(wrapped.toString());
                         
-                        //Create fields for discord message
-                        String status = attrs.get("status").getAsString();
-                        long id = attrs.get("id").getAsLong();
-                        String updated;
-
-                        if (attrs.has("updated_at")) {
-                            updated = attrs.get("updated_at").getAsString();
-                        } else {
-                            updated = "unknown";
-                        }
-                        String discordMessage = "Pipeline #" + id + " " + status.toUpperCase() + " at " + updated;
+                        String discordMessage = "Pipeline #" + attrs.get("id").getAsLong() + "/n" 
+                            + attrs.get("status").getAsString() + "/n" + "Triggered at " + updatedAt+"/n"
+                            + "Triggered Source " + attrs.get("source").getAsString()+"/n"+ "Triggered by" + attrs.get("username").getAsString();
                         
                         //send the discord message
                         sendDiscord(discordMessage);
                     }
-                    // Handle job events
-                    else if ("job".equals(kind)) {
-                        JsonObject build = json.getAsJsonObject("build");
-                        if (build == null) return;
 
-                        JsonObject pipeline = build.getAsJsonObject("pipeline");
-                        if (pipeline == null) return;
-
-                        String updatedAt = extractTimestamp(build);
-                        if (updatedAt != null) {
-                            pipeline.addProperty("updated_at", updatedAt);
-                        }
-
-                        //create a new json object to wrap the pipeline attributes
-                        JsonObject wrapped = new JsonObject();
-                        wrapped.addProperty("object_kind", "pipeline");
-                        wrapped.add("object_attributes", pipeline);
-
-                        //send the wrapped json object to GUI
-                        broadcast(wrapped.toString());
-
-                        //Create fields for discord message
-                        String status = build.get("status").getAsString();
-                        long id = build.get("id").getAsLong();
-                        String updated;
-
-                        if (build.has("updated_at")) {
-                            updated = build.get("updated_at").getAsString();
-                        } else {
-                            updated = "unknown";
-                        }
-                        String discordMessage = "Pipeline #" + id + " " + status.toUpperCase() + " at " + updated;
-                        
-                        //send the discord message
-                        sendDiscord(discordMessage);
-                    }
                 }
                 catch (Exception ignored) {
                     System.out.println("Failed to process webhook payload");
