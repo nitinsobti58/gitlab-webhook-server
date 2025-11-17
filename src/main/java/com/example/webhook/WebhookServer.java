@@ -142,9 +142,9 @@ public class WebhookServer {
                         //send the wrapped json object to GUI
                         broadcast(wrapped.toString());
                         
-                        String discordMessage = "Pipeline #" + attrs.get("id").getAsLong() + "/n" 
-                            + attrs.get("status").getAsString() + "/n" + "Triggered at " + updatedAt+"/n"
-                            + "Triggered Source " + attrs.get("source").getAsString();
+                        String discordMessage = "Pipeline #: " + attrs.get("id").getAsLong() +"\n Branch: "+attrs.has("ref")+ "\n"+"Status: " 
+                            + attrs.get("status").getAsString() + "\n" + "Triggered at: " + updatedAt+"\n"
+                            + "Triggered Source: " + attrs.get("source").getAsString();
                         
                         //send the discord message
                         sendDiscord(discordMessage);
