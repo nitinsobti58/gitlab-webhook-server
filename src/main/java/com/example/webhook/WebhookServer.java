@@ -148,6 +148,7 @@ public class WebhookServer {
                         
                         //send the discord message
                         System.out.println(discordMessage);
+                        sendDiscord("Some thing is wrong");
                         sendDiscord(discordMessage);
                     }
 
