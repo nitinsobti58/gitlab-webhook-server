@@ -147,6 +147,7 @@ public class WebhookServer {
                             + "Triggered Source: " + attrs.get("source").getAsString();
                         
                         //send the discord message
+                        System.out.println(discordMessage);
                         sendDiscord(discordMessage);
                     }
 
