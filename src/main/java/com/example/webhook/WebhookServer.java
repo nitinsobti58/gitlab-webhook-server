@@ -46,14 +46,14 @@ public class WebhookServer {
     }
 
     //Sends a message to discord
-    private static void sendDiscord(String message) {
-            String payload = "{\"content\": \"" + message.replace("\"","'") + "\"}";
-
+    private static void sendDiscord(String discordMessage, String discordString) {
+            
+            System.out.println("Sending discord message: " + discordMessage+"\n\n\n");
             //create discord POST Request
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(DISCORD_WEBHOOK_URL))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .POST(HttpRequest.BodyPublishers.ofString(discordMessage))
                 .build();
 
             //sends request
@@ -63,12 +63,12 @@ public class WebhookServer {
     //Sends a message to all connected clients
     //Only connected Channels Should be GUI
     private static void broadcast(String message) {
-        System.out.println("Connected GUI Clients: " + clients.size());
         
         //For each GUI, send the message
         for (WebSocketChannel client : clients) {
             WebSockets.sendText(message, client, null);
         }
+        System.out.println("Sent Message to " + clients.size() + " GUI(s)"+"\n\n\n");
     }
     
     public static void main(String[] args) {
@@ -117,7 +117,7 @@ public class WebhookServer {
             //data is full json payload as a string
             exchange.getRequestReceiver().receiveFullString((ex, data) -> 
             {
-                System.out.println("Received webhook payload:\n" + data);
+                System.out.println("Received webhook payload:\n" + data+"\n\n\n");
 
                 try
                 {
@@ -135,21 +135,25 @@ public class WebhookServer {
                         }
 
                         //create a new json object to wrap the pipeline attributes
-                        JsonObject wrapped = new JsonObject();
-                        wrapped.addProperty("object_kind", "pipeline");
-                        wrapped.add("object_attributes", attrs);
+                        JsonObject guiMessaage = new JsonObject();
+                        guiMessaage.addProperty("object_kind", "pipeline");
+                        guiMessaage.add("object_attributes", attrs);
 
                         //send the wrapped json object to GUI
-                        broadcast(wrapped.toString());
+                        broadcast(guiMessaage.toString());
                         
-                        String discordMessage = "Pipeline #: " + attrs.get("id").getAsLong() +"\n"+"Branch: "+attrs.get("ref").getAsString()+ "\n"+"Status: " 
-                            + attrs.get("status").getAsString() + "\n" + "Triggered at: " + updatedAt+"\n"
+                        // Create Discord message as JSON object
+                        JsonObject discordMessage = new JsonObject();
+                        
+                        String discordString = "Pipeline #: " + attrs.get("id").getAsLong() + "\n" + "Branch: " + attrs.get("ref").getAsString() + "\n" + "Status: " 
+                            + attrs.get("status").getAsString() + "\n" + "Triggered at: " + updatedAt + "\n"
                             + "Triggered Source: " + attrs.get("source").getAsString();
+                       
+                        discordMessage.addProperty("content", discordString);
                         
+
                         //send the discord message
-                        System.out.println(discordMessage);
-                        sendDiscord("Some thing is wrong");
-                        sendDiscord(discordMessage);
+                        sendDiscord(discordMessage.toString(),discordString);
                     }
 
                 }
