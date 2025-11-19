@@ -46,9 +46,9 @@ public class WebhookServer {
     }
 
     //Sends a message to discord
-    private static void sendDiscord(String discordMessage, String discordString) {
+    private static void sendDiscord(String discordMessage) {
             
-            System.out.println("Sending discord message: " + discordMessage+"\n\n\n");
+            System.out.println("Sending discord message: " + discordMessage+"\n");
             //create discord POST Request
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(DISCORD_WEBHOOK_URL))
@@ -68,7 +68,7 @@ public class WebhookServer {
         for (WebSocketChannel client : clients) {
             WebSockets.sendText(message, client, null);
         }
-        System.out.println("Sent Message to " + clients.size() + " GUI(s)"+"\n\n\n");
+        System.out.println("Sent Message to " + clients.size() + " GUI(s)"+"\n");
     }
     
     public static void main(String[] args) {
@@ -85,7 +85,6 @@ public class WebhookServer {
                 clients.add(channel);
 
                 channel.getReceiveSetter().set(new AbstractReceiveListener() {
-                    @Override
                     protected void onClose(WebSocketChannel ch, StreamSourceFrameChannel msg) {
                         //when a GUI disconnects, remove it from the set
                         clients.remove(ch);
@@ -100,6 +99,7 @@ public class WebhookServer {
         //Undertow interface to handle HTTP request and genereta a response
         //Uptime Robot pings this endpoint to check if the server is up
         HttpHandler pingHandler = exchange -> {
+            System.out.println("Uptime Robot pinged"+"\n");
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
             exchange.getResponseSender().send("OK");
         };
@@ -117,7 +117,7 @@ public class WebhookServer {
             //data is full json payload as a string
             exchange.getRequestReceiver().receiveFullString((ex, data) -> 
             {
-                System.out.println("Received webhook payload:\n" + data+"\n\n\n");
+                System.out.println("Received webhook payload:\n" + data+"\n");
 
                 try
                 {
@@ -147,13 +147,13 @@ public class WebhookServer {
                         
                         String discordString = "Pipeline #: " + attrs.get("id").getAsLong() + "\n" + "Branch: " + attrs.get("ref").getAsString() + "\n" + "Status: " 
                             + attrs.get("status").getAsString() + "\n" + "Triggered at: " + updatedAt + "\n"
-                            + "Triggered Source: " + attrs.get("source").getAsString();
+                            + "Triggered Source: " + attrs.get("source").getAsString()+"\n"+"\n";
                        
                         discordMessage.addProperty("content", discordString);
                         
 
                         //send the discord message
-                        sendDiscord(discordMessage.toString(),discordString);
+                        sendDiscord(discordMessage.toString());
                     }
 
                 }
